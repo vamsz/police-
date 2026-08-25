@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rally Deployment Tracker</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="auth-wrap">
+  <div class="card auth-card">
+    <h2 id="formTitle">Sign in</h2>
+
+    <form id="loginForm">
+      <label>Phone number</label>
+      <input type="tel" id="loginPhone" required placeholder="+91XXXXXXXXXX">
+      <label>Password</label>
+      <input type="password" id="loginPassword" required>
+      <div class="error" id="loginError"></div>
+      <button class="primary" type="submit">Sign in</button>
+    </form>
+
+    <form id="registerForm" style="display:none">
+      <label>Full name</label>
+      <input type="text" id="regName" required>
+      <label>Phone number (required)</label>
+      <input type="tel" id="regPhone" required placeholder="+91XXXXXXXXXX">
+      <label>Email (optional)</label>
+      <input type="email" id="regEmail">
+      <label>Password</label>
+      <input type="password" id="regPassword" required minlength="6">
+      <label>Badge / ID number (optional)</label>
+      <input type="text" id="regBadge">
+      <label>
+        <input type="checkbox" id="isAdmin" style="width:auto;display:inline-block;vertical-align:middle">
+        Registering as admin
+      </label>
+      <div id="adminCodeWrap" style="display:none">
+        <label>Admin registration code</label>
+        <input type="password" id="adminCode">
+      </div>
+      <div class="error" id="registerError"></div>
+      <button class="primary" type="submit">Create account</button>
+    </form>
+
+    <div class="hint" id="toggleHint">
+      New officer? <a href="#" id="showRegister">Register here</a>
+    </div>
+  </div>
+</div>
+
+<script src="api.js"></script>
+<script>
+const loginForm = document.getElementById('loginForm');
+const registerForm = document.getElementById('registerForm');
+const toggleHint = document.getElementById('toggleHint');
+const formTitle = document.getElementById('formTitle');
+const isAdmin = document.getElementById('isAdmin');
+const adminCodeWrap = document.getElementById('adminCodeWrap');
+
+// Already signed in -> go straight to the right screen.
+(function redirectIfSignedIn() {
+  const u = Api.user();
+  if (Api.token() && u) window.location.href = u.role === 'admin' ? 'admin.html' : 'officer.html';
+})();
+
+toggleHint.addEventListener('click', (e) => {
+  if (e.target.tagName !== 'A') return;
+  e.preventDefault();
+  const showingRegister = registerForm.style.display !== 'none';
+  loginForm.style.display = showingRegister ? '' : 'none';
+  registerForm.style.display = showingRegister ? 'none' : '';
+  formTitle.textContent = showingRegister ? 'Sign in' : 'Register';
+  toggleHint.innerHTML = showingRegister
+    ? 'New officer? <a href="#">Register here</a>'
+    : 'Already have an account? <a href="#">Sign in</a>';
+});
+
+isAdmin.addEventListener('change', () => {
+  adminCodeWrap.style.display = isAdmin.checked ? '' : 'none';
+});
+
+loginForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errorEl = document.getElementById('loginError');
+  errorEl.textContent = '';
+  try {
+    const data = await Api.request('/api/auth/login', {
+      method: 'POST',
+      body: {
+        phone: document.getElementById('loginPhone').value.trim(),
+        password: document.getElementById('loginPassword').value,
+      },
+    });
+    Api.setSession(data.token, data.user);
+    window.location.href = data.user.role === 'admin' ? 'admin.html' : 'officer.html';
+  } catch (err) {
+    errorEl.textContent = err.message;
+  }
+});
+
+registerForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errorEl = document.getElementById('registerError');
+  errorEl.textContent = '';
+  try {
+    const data = await Api.request('/api/auth/register', {
+      method: 'POST',
+      body: {
+        name: document.getElementById('regName').value.trim(),
+        phone: document.getElementById('regPhone').value.trim(),
+        email: document.getElementById('regEmail').value.trim() || undefined,
+        password: document.getElementById('regPassword').value,
+        badgeId: document.getElementById('regBadge').value.trim() || undefined,
+        role: isAdmin.checked ? 'admin' : 'officer',
+        adminCode: document.getElementById('adminCode').value || undefined,
+      },
+    });
+    Api.setSession(data.token, data.user);
+    window.location.href = data.user.role === 'admin' ? 'admin.html' : 'officer.html';
+  } catch (err) {
+    errorEl.textContent = err.message;
+  }
+});
+</script>
+</body>
+</html>

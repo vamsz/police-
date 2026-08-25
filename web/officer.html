@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Officer Tracking</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="topbar">
+  <h1 id="whoami">Officer</h1>
+  <button id="logout">Sign out</button>
+</div>
+
+<div id="banner" class="status-banner" style="display:none"></div>
+
+<div class="center-page">
+  <div class="card" style="max-width:420px">
+    <h2 style="margin-top:0">Assignment</h2>
+    <p id="assignmentInfo">Loading...</p>
+    <p id="locationStatus" style="color:#6b7280;font-size:0.85rem">Waiting for GPS permission...</p>
+  </div>
+</div>
+
+<script src="api.js"></script>
+<script>
+const user = Api.requireRole('officer');
+document.getElementById('whoami').textContent = `Officer — ${user.name}`;
+document.getElementById('logout').addEventListener('click', () => Api.logout());
+
+const banner = document.getElementById('banner');
+const assignmentInfo = document.getElementById('assignmentInfo');
+const locationStatus = document.getElementById('locationStatus');
+
+let assignment = null;
+
+function showBanner(text, level) {
+  banner.textContent = text;
+  banner.className = `status-banner ${level}`;
+  banner.style.display = '';
+}
+
+async function loadAssignment() {
+  try {
+    assignment = await Api.request('/api/assignments/mine');
+    assignmentInfo.textContent = assignment
+      ? `${assignment.rally_name} — stay within ${assignment.radius_meters}m of your assigned point.`
+      : 'No active assignment yet. Wait for the admin to assign your location.';
+  } catch (err) {
+    assignmentInfo.textContent = 'Could not load assignment.';
+  }
+}
+
+async function sendLocation(pos) {
+  const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+  locationStatus.textContent = `Last sent: ${new Date().toLocaleTimeString()} (accuracy ${Math.round(accuracy)}m)`;
+  try {
+    const result = await Api.request('/api/locations', { method: 'POST', body: { lat, lng, accuracy } });
+    if (result.isMock) {
+      showBanner('Suspicious location signal detected — this has been flagged to the admin.', 'warn');
+    } else if (result.outOfRadius) {
+      showBanner('You have moved outside your assigned surveillance area.', 'warn');
+    } else {
+      showBanner('Within assigned area.', 'ok');
+    }
+  } catch (err) {
+    locationStatus.textContent = `Failed to send location: ${err.message}`;
+  }
+}
+
+function startTracking() {
+  if (!navigator.geolocation) {
+    locationStatus.textContent = 'Geolocation is not supported on this device/browser.';
+    return;
+  }
+  navigator.geolocation.watchPosition(
+    sendLocation,
+    (err) => { locationStatus.textContent = `GPS error: ${err.message}`; },
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }
+  );
+}
+
+loadAssignment();
+startTracking();
+setInterval(loadAssignment, 30000);
+</script>
+</body>
+</html>
