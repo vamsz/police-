@@ -9,7 +9,9 @@
 <body>
 <div class="auth-wrap">
   <div class="card auth-card">
+    <div class="auth-logo">RD</div>
     <h2 id="formTitle">Sign in</h2>
+    <p class="tagline">Rally Deployment Tracker</p>
 
     <form id="loginForm">
       <label>Phone number</label>
@@ -31,10 +33,10 @@
       <input type="password" id="regPassword" required minlength="6">
       <label>Badge / ID number (optional)</label>
       <input type="text" id="regBadge">
-      <label>
-        <input type="checkbox" id="isAdmin" style="width:auto;display:inline-block;vertical-align:middle">
-        Registering as admin
-      </label>
+      <div class="check-row">
+        <input type="checkbox" id="isAdmin">
+        <span>Registering as admin</span>
+      </div>
       <div id="adminCodeWrap" style="display:none">
         <label>Admin registration code</label>
         <input type="password" id="adminCode">

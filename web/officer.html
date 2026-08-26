@@ -7,45 +7,121 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="topbar">
-  <h1 id="whoami">Officer</h1>
-  <button id="logout">Sign out</button>
+<div id="map"></div>
+
+<div class="float-top">
+  <div class="brand">
+    <div class="logo">RD</div>
+    <div>
+      <div class="t">On duty</div>
+      <div class="s" id="whoami">Officer</div>
+    </div>
+  </div>
+  <button id="logout" class="btn-ghost">Sign out</button>
 </div>
 
-<div id="banner" class="status-banner" style="display:none"></div>
-
-<div class="center-page">
-  <div class="card" style="max-width:420px">
-    <h2 style="margin-top:0">Assignment</h2>
-    <p id="assignmentInfo">Loading...</p>
-    <p id="locationStatus" style="color:#6b7280;font-size:0.85rem">Waiting for GPS permission...</p>
+<div class="sheet sheet-bottom">
+  <div class="handle"></div>
+  <div class="status-chip" id="banner">Locating…</div>
+  <h2 id="rallyName">My assignment</h2>
+  <p class="desc" id="assignmentInfo">Loading…</p>
+  <div class="meta-row">
+    <span class="dot"></span>
+    <span id="locationStatus">Waiting for GPS permission…</span>
   </div>
 </div>
 
 <script src="api.js"></script>
 <script>
 const user = Api.requireRole('officer');
-document.getElementById('whoami').textContent = `Officer — ${user.name}`;
+document.getElementById('whoami').textContent = user.name;
 document.getElementById('logout').addEventListener('click', () => Api.logout());
 
 const banner = document.getElementById('banner');
+const rallyName = document.getElementById('rallyName');
 const assignmentInfo = document.getElementById('assignmentInfo');
 const locationStatus = document.getElementById('locationStatus');
 
 let assignment = null;
+let map, zoneCircle, zoneMarker, meMarker;
+let lastPos = null;
 
 function showBanner(text, level) {
   banner.textContent = text;
-  banner.className = `status-banner ${level}`;
-  banner.style.display = '';
+  banner.className = `status-chip ${level}`;
+}
+
+function showMapError(msg) {
+  document.getElementById('map').innerHTML =
+    `<div class="map-error"><div class="map-error-card">
+       <strong>Map unavailable</strong><p>${msg}</p>
+     </div></div>`;
+}
+
+function setupMap() {
+  map = new google.maps.Map(document.getElementById('map'), {
+    center: { lat: 20.5937, lng: 78.9629 },
+    zoom: 5,
+    streetViewControl: false,
+    mapTypeControl: false,
+    fullscreenControl: false,
+    zoomControl: false,
+    styles: [
+      { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+      { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+    ],
+  });
+  drawZone();
+  drawMe();
+}
+
+function drawZone() {
+  if (!map || !assignment) return;
+  const center = { lat: assignment.lat, lng: assignment.lng };
+  if (!zoneCircle) {
+    zoneCircle = new google.maps.Circle({
+      map, strokeColor: '#101114', strokeWeight: 2, strokeOpacity: 0.85,
+      fillColor: '#ffd028', fillOpacity: 0.22,
+    });
+    zoneMarker = new google.maps.Marker({
+      map, title: 'Assigned point',
+      icon: {
+        path: google.maps.SymbolPath.CIRCLE, scale: 7,
+        fillColor: '#101114', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2,
+      },
+    });
+    map.setCenter(center);
+    map.setZoom(17);
+    map.panBy(0, -70); // lift the point clear of the bottom sheet
+  }
+  zoneCircle.setCenter(center);
+  zoneCircle.setRadius(assignment.radius_meters);
+  zoneMarker.setPosition(center);
+}
+
+function drawMe() {
+  if (!map || !lastPos) return;
+  if (!meMarker) {
+    meMarker = new google.maps.Marker({
+      map, title: 'You',
+      icon: {
+        path: google.maps.SymbolPath.CIRCLE, scale: 8,
+        fillColor: '#15803d', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2,
+      },
+    });
+    if (!assignment) { map.setCenter(lastPos); map.setZoom(16); }
+  }
+  meMarker.setPosition(lastPos);
 }
 
 async function loadAssignment() {
   try {
     assignment = await Api.request('/api/assignments/mine');
+    rallyName.textContent = assignment ? assignment.rally_name : 'No assignment yet';
     assignmentInfo.textContent = assignment
-      ? `${assignment.rally_name} — stay within ${assignment.radius_meters}m of your assigned point.`
-      : 'No active assignment yet. Wait for the admin to assign your location.';
+      ? `Stay within ${assignment.radius_meters} m of your assigned point.`
+      : 'Waiting for the admin to assign your surveillance location.';
+    drawZone();
   } catch (err) {
     assignmentInfo.textContent = 'Could not load assignment.';
   }
@@ -53,15 +129,17 @@ async function loadAssignment() {
 
 async function sendLocation(pos) {
   const { latitude: lat, longitude: lng, accuracy } = pos.coords;
-  locationStatus.textContent = `Last sent: ${new Date().toLocaleTimeString()} (accuracy ${Math.round(accuracy)}m)`;
+  lastPos = { lat, lng };
+  drawMe();
+  locationStatus.textContent = `Live · updated ${new Date().toLocaleTimeString()} · ±${Math.round(accuracy)} m`;
   try {
     const result = await Api.request('/api/locations', { method: 'POST', body: { lat, lng, accuracy } });
     if (result.isMock) {
-      showBanner('Suspicious location signal detected — this has been flagged to the admin.', 'warn');
+      showBanner('Suspicious location signal — flagged', 'warn');
     } else if (result.outOfRadius) {
-      showBanner('You have moved outside your assigned surveillance area.', 'warn');
+      showBanner('Outside assigned area', 'warn');
     } else {
-      showBanner('Within assigned area.', 'ok');
+      showBanner('On post', 'ok');
     }
   } catch (err) {
     locationStatus.textContent = `Failed to send location: ${err.message}`;
@@ -80,6 +158,7 @@ function startTracking() {
   );
 }
 
+Api.loadMaps(showMapError).then((ready) => { if (ready) setupMap(); });
 loadAssignment();
 startTracking();
 setInterval(loadAssignment, 30000);

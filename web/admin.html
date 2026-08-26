@@ -7,36 +7,45 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="topbar">
-  <h1 id="whoami">Admin</h1>
-  <button id="logout">Sign out</button>
+<div id="map"></div>
+
+<div class="float-top">
+  <div class="brand">
+    <div class="logo">RD</div>
+    <div>
+      <div class="t">Rally Deployment</div>
+      <div class="s" id="whoami">Admin</div>
+    </div>
+  </div>
+  <button id="logout" class="btn-ghost">Sign out</button>
 </div>
 
-<div class="layout">
-  <div class="sidebar">
+<div class="panel">
+  <div class="stats" id="stats"></div>
+  <div class="panel-scroll">
     <h3>Officers</h3>
     <div id="officerList"></div>
-    <h3>Unresolved alerts</h3>
+    <h3>Unresolved alerts <span class="count-badge" id="alertCount" style="display:none"></span></h3>
     <div id="alertList"></div>
   </div>
-  <div id="map"></div>
 </div>
 
-<div id="profileModal" class="modal-backdrop" style="display:none">
-  <div class="card modal">
+<div id="profileModal" style="display:none">
+  <div class="sheet sheet-right">
     <h3 id="pmName"></h3>
     <dl>
       <dt>Phone</dt><dd id="pmPhone"></dd>
       <dt>Email</dt><dd id="pmEmail"></dd>
       <dt>Badge</dt><dd id="pmBadge"></dd>
       <dt>Status</dt><dd id="pmStatus"></dd>
+      <dt>Last seen</dt><dd id="pmLastSeen"></dd>
     </dl>
     <div style="margin-top:0.75rem">
       <label>Rally / area name</label>
       <input type="text" id="pmRallyName" placeholder="e.g. MG Road Rally">
       <label>Radius (meters)</label>
       <input type="number" id="pmRadius" value="25" min="5">
-      <p style="font-size:0.8rem;color:#6b7280">Click a point on the map, then "Set location", to assign this officer's surveillance point.</p>
+      <p class="assign-hint" id="assignHint">Click a point on the map to place this officer's surveillance point.</p>
       <button class="primary" id="pmAssign" disabled>Set location (click map first)</button>
     </div>
     <div class="close"><button id="pmClose">Close</button></div>
@@ -46,40 +55,88 @@
 <script src="api.js"></script>
 <script>
 const user = Api.requireRole('admin');
-document.getElementById('whoami').textContent = `Admin — ${user.name}`;
+document.getElementById('whoami').textContent = `Admin · ${user.name}`;
 document.getElementById('logout').addEventListener('click', () => Api.logout());
 
-let map, markers = {}, selectedOfficerId = null, pendingPoint = null;
+let map, markers = {}, zones = {}, selectedOfficerId = null, pendingPoint = null;
+let previewMarker = null, previewCircle = null;
+let didAutoFit = false;
 
-async function initMap() {
-  const cfg = await Api.request('/api/config');
-  if (!cfg.googleMapsApiKey) {
-    document.getElementById('map').innerHTML =
-      '<div class="center-page">Google Maps API key not configured. Add GOOGLE_MAPS_API_KEY to backend/.env.</div>';
-    return;
-  }
-  const script = document.createElement('script');
-  script.src = `https://maps.googleapis.com/maps/api/js?key=${cfg.googleMapsApiKey}&callback=onMapsLoaded`;
-  script.async = true;
-  document.head.appendChild(script);
+function showMapError(msg) {
+  document.getElementById('map').innerHTML =
+    `<div class="map-error"><div class="map-error-card">
+       <strong>Map unavailable</strong><p>${msg}</p>
+     </div></div>`;
 }
 
-window.onMapsLoaded = function () {
+function setupMap() {
   map = new google.maps.Map(document.getElementById('map'), {
     center: { lat: 20.5937, lng: 78.9629 },
     zoom: 5,
+    streetViewControl: false,
+    mapTypeControl: false,
+    fullscreenControl: false,
+    styles: [
+      { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+      { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+    ],
   });
   map.addListener('click', (e) => {
+    if (!selectedOfficerId) return;
     pendingPoint = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+    drawPreview();
     const btn = document.getElementById('pmAssign');
-    if (selectedOfficerId) {
-      btn.disabled = false;
-      btn.textContent = `Set location (${pendingPoint.lat.toFixed(5)}, ${pendingPoint.lng.toFixed(5)})`;
-    }
+    btn.disabled = false;
+    btn.textContent = 'Set location here';
+    document.getElementById('assignHint').textContent =
+      `Point selected: ${pendingPoint.lat.toFixed(5)}, ${pendingPoint.lng.toFixed(5)}. Drag the pin to adjust.`;
   });
   refreshAll();
   setInterval(refreshAll, 8000);
+}
+
+function drawPreview() {
+  const radius = Number(document.getElementById('pmRadius').value) || 25;
+  if (!previewMarker) {
+    previewMarker = new google.maps.Marker({
+      map, draggable: true, icon: dotIcon('accent', 8),
+    });
+    previewMarker.addListener('dragend', (e) => {
+      pendingPoint = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+      drawPreview();
+    });
+    previewCircle = new google.maps.Circle({ map, ...ZONE_STYLE });
+  }
+  previewMarker.setPosition(pendingPoint);
+  previewCircle.setCenter(pendingPoint);
+  previewCircle.setRadius(radius);
+}
+
+function clearPreview() {
+  if (previewMarker) { previewMarker.setMap(null); previewMarker = null; }
+  if (previewCircle) { previewCircle.setMap(null); previewCircle = null; }
+}
+
+document.getElementById('pmRadius').addEventListener('input', () => {
+  if (previewCircle) previewCircle.setRadius(Number(document.getElementById('pmRadius').value) || 25);
+});
+
+const DOT_COLORS = { green: '#16a34a', red: '#dc2626', grey: '#a6abb3', accent: '#101114' };
+const ZONE_STYLE = {
+  strokeColor: '#101114', strokeWeight: 2, strokeOpacity: 0.85,
+  fillColor: '#ffd028', fillOpacity: 0.22,
 };
+
+function dotIcon(color, scale = 7) {
+  return {
+    path: google.maps.SymbolPath.CIRCLE,
+    scale,
+    fillColor: DOT_COLORS[color],
+    fillOpacity: 1,
+    strokeColor: '#fff',
+    strokeWeight: 2,
+  };
+}
 
 function markerColor(o) {
   if (o.current_lat == null) return 'grey';
@@ -97,69 +154,137 @@ function haversine(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
+function timeAgo(ts) {
+  if (!ts) return 'never';
+  const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
+  if (s < 10) return 'just now';
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return new Date(ts).toLocaleString();
+}
+
 async function refreshAll() {
   const officers = await Api.request('/api/users');
+  renderStats(officers);
   renderSidebar(officers);
   renderMarkers(officers);
   const alerts = await Api.request('/api/alerts');
   renderAlerts(alerts);
 }
 
+function renderStats(officers) {
+  let onPost = 0, out = 0, noSignal = 0;
+  officers.forEach((o) => {
+    const c = markerColor(o);
+    if (c === 'green') onPost++; else if (c === 'red') out++; else noSignal++;
+  });
+  document.getElementById('stats').innerHTML = `
+    <div class="stat"><div class="num">${officers.length}</div><div class="lbl">Total</div></div>
+    <div class="stat"><div class="num">${onPost}</div><div class="lbl">On post</div></div>
+    <div class="stat"><div class="num">${out}</div><div class="lbl">Out of area</div></div>
+    <div class="stat"><div class="num">${noSignal}</div><div class="lbl">No signal</div></div>
+  `;
+}
+
+function initials(name) {
+  return name.trim().split(/\s+/).slice(0, 2).map((p) => p[0].toUpperCase()).join('');
+}
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s ?? '';
+  return d.innerHTML;
+}
+
 function renderSidebar(officers) {
   const el = document.getElementById('officerList');
+  if (!officers.length) {
+    el.innerHTML = '<div class="empty-state">No officers registered yet.</div>';
+    return;
+  }
   el.innerHTML = '';
   officers.forEach((o) => {
     const row = document.createElement('div');
     row.className = 'officer-row';
     const color = markerColor(o);
-    const badgeClass = color === 'red' ? 'warn' : color === 'green' ? 'ok' : 'muted';
-    const badgeText = o.current_lat == null ? 'No signal' : (color === 'red' ? 'Out of area' : 'On post');
+    const statusClass = color === 'red' ? 'warn' : color === 'green' ? 'ok' : '';
+    const statusText = o.current_lat == null ? 'No signal' : (color === 'red' ? 'Out of area' : 'On post');
+    const sub = o.rally_name
+      ? `${esc(o.rally_name)} · seen ${timeAgo(o.last_seen)}`
+      : `Unassigned${o.last_seen ? ' · seen ' + timeAgo(o.last_seen) : ''}`;
     row.innerHTML = `
-      <div>
-        <div class="name">${o.name}</div>
-        <div class="sub">${o.rally_name || 'Unassigned'}</div>
+      <div class="avatar">${esc(initials(o.name))}</div>
+      <div class="info">
+        <div class="name">${esc(o.name)}</div>
+        <div class="sub">${sub}</div>
       </div>
-      <span class="badge ${badgeClass}">${badgeText}</span>
+      <span class="status ${statusClass}">${statusText}</span>
     `;
-    row.addEventListener('click', () => openProfile(o));
+    row.addEventListener('click', () => {
+      if (o.current_lat != null) { map.panTo({ lat: o.current_lat, lng: o.current_lng }); if (map.getZoom() < 15) map.setZoom(15); }
+      else if (o.assigned_lat != null) { map.panTo({ lat: o.assigned_lat, lng: o.assigned_lng }); if (map.getZoom() < 15) map.setZoom(15); }
+      openProfile(o);
+    });
     el.appendChild(row);
   });
 }
 
 function renderMarkers(officers) {
+  const bounds = new google.maps.LatLngBounds();
+  let hasPoints = false;
+
   officers.forEach((o) => {
+    // Assigned-zone circle
+    if (o.assignment_id) {
+      const center = { lat: o.assigned_lat, lng: o.assigned_lng };
+      if (!zones[o.id]) {
+        zones[o.id] = new google.maps.Circle({ map, ...ZONE_STYLE, fillOpacity: 0.16 });
+      }
+      zones[o.id].setCenter(center);
+      zones[o.id].setRadius(o.radius_meters);
+      bounds.extend(center); hasPoints = true;
+    } else if (zones[o.id]) {
+      zones[o.id].setMap(null);
+      delete zones[o.id];
+    }
+
+    // Live position marker
     if (o.current_lat == null) return;
+    const pos = { lat: o.current_lat, lng: o.current_lng };
+    bounds.extend(pos); hasPoints = true;
     const color = markerColor(o);
-    const icon = {
-      url: `https://maps.google.com/mapfiles/ms/icons/${color}-dot.png`,
-    };
+    const icon = dotIcon(color);
     if (markers[o.id]) {
-      markers[o.id].setPosition({ lat: o.current_lat, lng: o.current_lng });
+      markers[o.id].setPosition(pos);
       markers[o.id].setIcon(icon);
     } else {
-      markers[o.id] = new google.maps.Marker({
-        position: { lat: o.current_lat, lng: o.current_lng },
-        map,
-        title: o.name,
-        icon,
-      });
+      markers[o.id] = new google.maps.Marker({ position: pos, map, title: o.name, icon });
       markers[o.id].addListener('click', () => openProfile(o));
     }
   });
+
+  if (!didAutoFit && hasPoints) {
+    didAutoFit = true;
+    // Keep pins clear of the floating header and side panel.
+    map.fitBounds(bounds, { top: 110, left: 370, right: 380, bottom: 40 });
+    google.maps.event.addListenerOnce(map, 'idle', () => { if (map.getZoom() > 16) map.setZoom(16); });
+  }
 }
 
 function renderAlerts(alerts) {
   const el = document.getElementById('alertList');
-  el.innerHTML = alerts.length
-    ? ''
-    : '<div class="alert-item"><span class="meta">No active alerts.</span></div>';
+  const countEl = document.getElementById('alertCount');
+  countEl.style.display = alerts.length ? '' : 'none';
+  countEl.textContent = alerts.length;
+  el.innerHTML = alerts.length ? '' : '<div class="empty-state">No active alerts.</div>';
   alerts.forEach((a) => {
     const item = document.createElement('div');
     item.className = 'alert-item';
     item.innerHTML = `
-      <div class="msg">${a.user_name}: ${a.message}</div>
-      <div class="meta">${new Date(a.created_at).toLocaleString()}
-        <a href="#" data-id="${a.id}" class="resolve">resolve</a>
+      <div class="msg">${esc(a.user_name)}: ${esc(a.message)}</div>
+      <div class="meta">${timeAgo(a.created_at)}
+        <a href="#" class="resolve">resolve</a>
       </div>
     `;
     item.querySelector('.resolve').addEventListener('click', async (e) => {
@@ -174,24 +299,33 @@ function renderAlerts(alerts) {
 async function openProfile(o) {
   selectedOfficerId = o.id;
   pendingPoint = null;
+  clearPreview();
   const full = await Api.request(`/api/users/${o.id}`);
   document.getElementById('pmName').textContent = full.name;
   document.getElementById('pmPhone').textContent = full.phone;
   document.getElementById('pmEmail').textContent = full.email || '—';
   document.getElementById('pmBadge').textContent = full.badge_id || '—';
   document.getElementById('pmStatus').textContent = full.flagged ? 'Flagged (suspicious location activity)' : 'Normal';
+  document.getElementById('pmLastSeen').textContent = timeAgo(o.last_seen);
   document.getElementById('pmRallyName').value = o.rally_name || '';
   document.getElementById('pmRadius').value = o.radius_meters || 25;
   const btn = document.getElementById('pmAssign');
   btn.disabled = true;
   btn.textContent = 'Set location (click map first)';
+  document.getElementById('assignHint').textContent =
+    "Click a point on the map to place this officer's surveillance point.";
   document.getElementById('profileModal').style.display = 'flex';
 }
 
-document.getElementById('pmClose').addEventListener('click', () => {
+function closeProfile() {
   document.getElementById('profileModal').style.display = 'none';
   selectedOfficerId = null;
-});
+  pendingPoint = null;
+  clearPreview();
+}
+
+document.getElementById('pmClose').addEventListener('click', closeProfile);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeProfile(); });
 
 document.getElementById('pmAssign').addEventListener('click', async () => {
   if (!pendingPoint || !selectedOfficerId) return;
@@ -201,12 +335,11 @@ document.getElementById('pmAssign').addEventListener('click', async () => {
     method: 'POST',
     body: { userId: selectedOfficerId, rallyName, lat: pendingPoint.lat, lng: pendingPoint.lng, radiusMeters },
   });
-  document.getElementById('profileModal').style.display = 'none';
-  selectedOfficerId = null;
+  closeProfile();
   refreshAll();
 });
 
-initMap();
+Api.loadMaps(showMapError).then((ready) => { if (ready) setupMap(); });
 </script>
 </body>
 </html>
