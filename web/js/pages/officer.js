@@ -57,7 +57,7 @@ class OfficerView {
 
     try {
       const maps = await loadMaps(config.googleMapsApiKey);
-      this.#map = new DeploymentMap(maps, container);
+      this.#map = new DeploymentMap(maps, container, { view: config.map });
       $('#recentre').addEventListener('click', () => this.#recentre());
     } catch (err) {
       render(container, el('div', { class: 'map__notice' }, [el('p', { text: err.message })]));
@@ -158,7 +158,8 @@ class OfficerView {
     };
 
     this.#map.syncOfficers([marker]);
-    this.#map.fitToContentOnce([marker]);
+    // Keep the officer's marker clear of the bottom sheet and the header.
+    this.#map.fitToContentOnce([marker], { top: 96, bottom: 300, left: 40, right: 40 });
   }
 
   #recentre() {

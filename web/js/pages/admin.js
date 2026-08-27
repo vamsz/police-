@@ -76,7 +76,7 @@ async function initMap() {
 
   try {
     const maps = await loadMaps(state.config.googleMapsApiKey);
-    state.map = new DeploymentMap(maps, container, { onMapClick: handleMapClick });
+    state.map = new DeploymentMap(maps, container, { view: state.config.map, onMapClick: handleMapClick });
   } catch (err) {
     render(container, el('div', { class: 'map__notice' }, [el('p', { text: err.message })]));
   }
@@ -106,7 +106,8 @@ async function refresh() {
   if (state.selectedId && !state.placement) renderDetail();
 
   state.map?.syncOfficers(state.officers, { onSelect: selectOfficer, selectedId: state.selectedId });
-  state.map?.fitToContentOnce(state.officers);
+  // Keep officers clear of the floating panel (left) and header (top).
+  state.map?.fitToContentOnce(state.officers, { left: 372, top: 96, right: 40, bottom: 40 });
 }
 
 /* ------------------------------------------------------------------ roster */

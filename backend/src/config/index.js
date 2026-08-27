@@ -48,6 +48,17 @@ function integer(name, fallback, { min = 0, max = Number.MAX_SAFE_INTEGER } = {}
   return value;
 }
 
+function decimal(name, fallback, { min = -Infinity, max = Infinity } = {}) {
+  const raw = (process.env[name] || '').trim();
+  if (!raw) return fallback;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < min || value > max) {
+    problems.push(`${name} must be a number between ${min} and ${max}`);
+    return fallback;
+  }
+  return value;
+}
+
 const env = optional('NODE_ENV', 'development');
 
 const config = Object.freeze({
@@ -69,6 +80,15 @@ const config = Object.freeze({
 
   maps: Object.freeze({
     apiKey: optional('GOOGLE_MAPS_API_KEY'),
+    // The view shown before any officer position is known, and the empty-state
+    // fallback. Defaults to central Bengaluru; set these to your own city.
+    defaultLat: decimal('MAP_DEFAULT_LAT', 12.9716, { min: -90, max: 90 }),
+    defaultLng: decimal('MAP_DEFAULT_LNG', 77.5946, { min: -180, max: 180 }),
+    defaultZoom: integer('MAP_DEFAULT_ZOOM', 12, { min: 3, max: 20 }),
+    // Stops the map zooming out to a country/world view of mostly-empty tiles,
+    // which is pointless for a single-city deployment and slow to load.
+    minZoom: integer('MAP_MIN_ZOOM', 11, { min: 3, max: 18 }),
+    maxZoom: integer('MAP_MAX_ZOOM', 20, { min: 14, max: 22 }),
   }),
 
   tracking: Object.freeze({

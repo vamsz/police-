@@ -80,23 +80,62 @@ export class DeploymentMap {
   #placement = null;
   #hasFitted = false;
 
-  constructor(maps, container, { center, onMapClick } = {}) {
+  constructor(maps, container, { center, view = {}, onMapClick } = {}) {
     this.#maps = maps;
+
+    // Google's tiles are light, so the pre-load ground is a neutral map grey
+    // (what Google itself shows) rather than the dark theme colour — that keeps
+    // the transition to tiles smooth instead of a bright flash on a dark panel.
+    const backgroundColor = '#e5e3df';
+
     this.#map = new maps.Map(container, {
-      center: center ?? { lat: 20.5937, lng: 78.9629 },
-      zoom: center ? 15 : 5,
+      center: center ?? view.defaultCenter ?? { lat: 12.9716, lng: 77.5946 },
+      zoom: center ? Math.max(15, view.minZoom ?? 11) : view.defaultZoom ?? 12,
+      // Capping how far out you can zoom is the single biggest smoothness win:
+      // it stops the map loading a country/world of mostly-empty tiles that this
+      // single-city tool never needs.
+      minZoom: view.minZoom ?? 11,
+      maxZoom: view.maxZoom ?? 20,
+      backgroundColor,
       mapTypeControl: false,
       streetViewControl: false,
       fullscreenControl: false,
       clickableIcons: false,
       gestureHandling: 'greedy',
+      // Keep controls clear of the floating cards.
+      zoomControlOptions: { position: maps.ControlPosition.RIGHT_BOTTOM },
     });
+
+    this.#attachLoadingIndicator(container);
 
     if (onMapClick) {
       this.#map.addListener('click', (event) => {
         onMapClick({ lat: event.latLng.lat(), lng: event.latLng.lng() });
       });
     }
+  }
+
+  /**
+   * A small "Loading map…" chip that shows until the first tiles paint, so a
+   * slow tile load reads as progress rather than a broken blank map.
+   */
+  #attachLoadingIndicator(container) {
+    const chip = document.createElement('div');
+    chip.className = 'map-loading';
+    chip.textContent = 'Loading map…';
+    container.appendChild(chip);
+
+    let cleared = false;
+    const clear = () => {
+      if (cleared) return;
+      cleared = true;
+      chip.classList.add('map-loading--done');
+      setTimeout(() => chip.remove(), 400);
+    };
+
+    this.#maps.event.addListenerOnce(this.#map, 'tilesloaded', clear);
+    // Fallback: never leave the chip up forever if tiles are throttled/blocked.
+    setTimeout(clear, 8000);
   }
 
   get map() {
@@ -260,7 +299,7 @@ export class DeploymentMap {
    * Frames everything on screen, but only the first time. Refitting on every
    * poll would yank the map out from under an operator who has panned somewhere.
    */
-  fitToContentOnce(officers) {
+  fitToContentOnce(officers, padding) {
     if (this.#hasFitted) return;
 
     const bounds = new this.#maps.LatLngBounds();
@@ -280,11 +319,20 @@ export class DeploymentMap {
     if (!points) return;
     this.#hasFitted = true;
 
+    // The floating panel and sheet overlap the map, so the fit is padded to keep
+    // officers in the part of the map that is actually visible, not hidden behind
+    // the chrome. fitBounds honours a {top,right,bottom,left} padding directly;
+    // for the single-point path we recentre with an equivalent pixel offset.
+    const pad = { top: 90, right: 40, bottom: 40, left: 40, ...(padding || {}) };
+
     if (points === 1) {
       this.#map.setCenter(bounds.getCenter());
       this.#map.setZoom(16);
+      this.#maps.event.addListenerOnce(this.#map, 'idle', () => {
+        this.#map.panBy((pad.right - pad.left) / 2, (pad.bottom - pad.top) / 2);
+      });
     } else {
-      this.#map.fitBounds(bounds, 64);
+      this.#map.fitBounds(bounds, pad);
     }
   }
 }
