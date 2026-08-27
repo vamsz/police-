@@ -1,33 +1,41 @@
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
-const path = require('path');
+'use strict';
 
-const authRoutes = require('./routes/auth');
-const userRoutes = require('./routes/users');
-const assignmentRoutes = require('./routes/assignments');
-const locationRoutes = require('./routes/locations');
-const alertRoutes = require('./routes/alerts');
+const { assertValid, config } = require('./config');
+const logger = require('./lib/logger');
 
-const app = express();
-app.use(helmet({ contentSecurityPolicy: false }));
-app.use(cors());
-app.use(express.json());
+function main() {
+  try {
+    assertValid();
+  } catch (err) {
+    console.error(`\n${err.message}\n`);
+    process.exit(1);
+  }
 
-app.use('/api/auth', rateLimit({ windowMs: 15 * 60 * 1000, max: 20 }), authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/assignments', assignmentRoutes);
-app.use('/api/locations', locationRoutes);
-app.use('/api/alerts', alertRoutes);
+  const { createApp } = require('./http/app');
+  const { pool } = require('./db/pool');
+  const monitor = require('./services/monitor.service');
 
-// Frontend reads its Maps key from here instead of hardcoding it in static JS.
-app.get('/api/config', (req, res) => {
-  res.json({ googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY || '' });
-});
+  const server = createApp().listen(config.port, () => {
+    logger.info('Server listening', { port: config.port, env: config.env });
+    if (!config.maps.apiKey) {
+      logger.warn('GOOGLE_MAPS_API_KEY is not set - map views will show a setup notice');
+    }
+    monitor.start();
+  });
 
-app.use(express.static(path.join(__dirname, '..', '..', 'web')));
+  const shutdown = (signal) => {
+    logger.info('Shutting down', { signal });
+    monitor.stop();
+    server.close(() => pool.end().then(() => process.exit(0)));
+    // Do not let a hung connection hold the process open forever.
+    setTimeout(() => process.exit(1), 10_000).unref();
+  };
 
-const port = process.env.PORT || 4000;
-app.listen(port, () => console.log(`Server listening on port ${port}`));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('unhandledRejection', (reason) => {
+    logger.error('Unhandled promise rejection', { reason: String(reason) });
+  });
+}
+
+main();

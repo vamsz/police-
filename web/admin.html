@@ -1,212 +1,55 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Admin — Rally Deployment</title>
-<link rel="stylesheet" href="style.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Deployment console · Rally Deployment Tracker</title>
+<link rel="stylesheet" href="/assets/styles.css">
 </head>
 <body>
-<div class="topbar">
-  <h1 id="whoami">Admin</h1>
-  <button id="logout">Sign out</button>
-</div>
-
-<div class="layout">
-  <div class="sidebar">
-    <h3>Officers</h3>
-    <div id="officerList"></div>
-    <h3>Unresolved alerts</h3>
-    <div id="alertList"></div>
+<header class="topbar">
+  <span class="topbar__mark" aria-hidden="true">◎</span>
+  <div>
+    <div class="topbar__title">Deployment console</div>
+    <div class="topbar__subtitle" id="adminName">Supervisor</div>
   </div>
-  <div id="map"></div>
-</div>
+  <div class="topbar__spacer"></div>
+  <span class="topbar__subtitle" id="refreshedAt"></span>
+  <button type="button" id="signOut">Sign out</button>
+</header>
 
-<div id="profileModal" class="modal-backdrop" style="display:none">
-  <div class="card modal">
-    <h3 id="pmName"></h3>
-    <dl>
-      <dt>Phone</dt><dd id="pmPhone"></dd>
-      <dt>Email</dt><dd id="pmEmail"></dd>
-      <dt>Badge</dt><dd id="pmBadge"></dd>
-      <dt>Status</dt><dd id="pmStatus"></dd>
-    </dl>
-    <div style="margin-top:0.75rem">
-      <label>Rally / area name</label>
-      <input type="text" id="pmRallyName" placeholder="e.g. MG Road Rally">
-      <label>Radius (meters)</label>
-      <input type="number" id="pmRadius" value="25" min="5">
-      <p style="font-size:0.8rem;color:#6b7280">Click a point on the map, then "Set location", to assign this officer's surveillance point.</p>
-      <button class="primary" id="pmAssign" disabled>Set location (click map first)</button>
+<div class="console">
+  <aside class="panel">
+    <!-- Roster mode -->
+    <div id="rosterMode" class="panel__scroll">
+      <div class="summary" id="summary"></div>
+
+      <div class="panel__search">
+        <label class="sr-only" for="search">Search officers</label>
+        <input type="search" id="search" placeholder="Search by name, badge, or rally…" autocomplete="off">
+      </div>
+
+      <h2 class="panel__section-title">
+        <span>Officers</span>
+        <span id="rosterCount"></span>
+      </h2>
+      <div id="roster"></div>
+
+      <h2 class="panel__section-title">
+        <span>Open alerts</span>
+        <span id="alertCount"></span>
+      </h2>
+      <div id="alerts"></div>
     </div>
-    <div class="close"><button id="pmClose">Close</button></div>
-  </div>
+
+    <!-- Detail mode: replaces the roster so the map is never covered -->
+    <div id="detailMode" class="panel__scroll" hidden></div>
+  </aside>
+
+  <div id="map" class="map"></div>
 </div>
 
-<script src="api.js"></script>
-<script>
-const user = Api.requireRole('admin');
-document.getElementById('whoami').textContent = `Admin — ${user.name}`;
-document.getElementById('logout').addEventListener('click', () => Api.logout());
-
-let map, markers = {}, selectedOfficerId = null, pendingPoint = null;
-
-async function initMap() {
-  const cfg = await Api.request('/api/config');
-  if (!cfg.googleMapsApiKey) {
-    document.getElementById('map').innerHTML =
-      '<div class="center-page">Google Maps API key not configured. Add GOOGLE_MAPS_API_KEY to backend/.env.</div>';
-    return;
-  }
-  const script = document.createElement('script');
-  script.src = `https://maps.googleapis.com/maps/api/js?key=${cfg.googleMapsApiKey}&callback=onMapsLoaded`;
-  script.async = true;
-  document.head.appendChild(script);
-}
-
-window.onMapsLoaded = function () {
-  map = new google.maps.Map(document.getElementById('map'), {
-    center: { lat: 20.5937, lng: 78.9629 },
-    zoom: 5,
-  });
-  map.addListener('click', (e) => {
-    pendingPoint = { lat: e.latLng.lat(), lng: e.latLng.lng() };
-    const btn = document.getElementById('pmAssign');
-    if (selectedOfficerId) {
-      btn.disabled = false;
-      btn.textContent = `Set location (${pendingPoint.lat.toFixed(5)}, ${pendingPoint.lng.toFixed(5)})`;
-    }
-  });
-  refreshAll();
-  setInterval(refreshAll, 8000);
-};
-
-function markerColor(o) {
-  if (o.current_lat == null) return 'grey';
-  if (o.assignment_id) {
-    const dist = haversine(o.assigned_lat, o.assigned_lng, o.current_lat, o.current_lng);
-    if (dist > o.radius_meters) return 'red';
-  }
-  return 'green';
-}
-
-function haversine(lat1, lng1, lat2, lng2) {
-  const R = 6371000, toRad = (d) => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1);
-  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-}
-
-async function refreshAll() {
-  const officers = await Api.request('/api/users');
-  renderSidebar(officers);
-  renderMarkers(officers);
-  const alerts = await Api.request('/api/alerts');
-  renderAlerts(alerts);
-}
-
-function renderSidebar(officers) {
-  const el = document.getElementById('officerList');
-  el.innerHTML = '';
-  officers.forEach((o) => {
-    const row = document.createElement('div');
-    row.className = 'officer-row';
-    const color = markerColor(o);
-    const badgeClass = color === 'red' ? 'warn' : color === 'green' ? 'ok' : 'muted';
-    const badgeText = o.current_lat == null ? 'No signal' : (color === 'red' ? 'Out of area' : 'On post');
-    row.innerHTML = `
-      <div>
-        <div class="name">${o.name}</div>
-        <div class="sub">${o.rally_name || 'Unassigned'}</div>
-      </div>
-      <span class="badge ${badgeClass}">${badgeText}</span>
-    `;
-    row.addEventListener('click', () => openProfile(o));
-    el.appendChild(row);
-  });
-}
-
-function renderMarkers(officers) {
-  officers.forEach((o) => {
-    if (o.current_lat == null) return;
-    const color = markerColor(o);
-    const icon = {
-      url: `https://maps.google.com/mapfiles/ms/icons/${color}-dot.png`,
-    };
-    if (markers[o.id]) {
-      markers[o.id].setPosition({ lat: o.current_lat, lng: o.current_lng });
-      markers[o.id].setIcon(icon);
-    } else {
-      markers[o.id] = new google.maps.Marker({
-        position: { lat: o.current_lat, lng: o.current_lng },
-        map,
-        title: o.name,
-        icon,
-      });
-      markers[o.id].addListener('click', () => openProfile(o));
-    }
-  });
-}
-
-function renderAlerts(alerts) {
-  const el = document.getElementById('alertList');
-  el.innerHTML = alerts.length
-    ? ''
-    : '<div class="alert-item"><span class="meta">No active alerts.</span></div>';
-  alerts.forEach((a) => {
-    const item = document.createElement('div');
-    item.className = 'alert-item';
-    item.innerHTML = `
-      <div class="msg">${a.user_name}: ${a.message}</div>
-      <div class="meta">${new Date(a.created_at).toLocaleString()}
-        <a href="#" data-id="${a.id}" class="resolve">resolve</a>
-      </div>
-    `;
-    item.querySelector('.resolve').addEventListener('click', async (e) => {
-      e.preventDefault();
-      await Api.request(`/api/alerts/${a.id}/resolve`, { method: 'POST' });
-      refreshAll();
-    });
-    el.appendChild(item);
-  });
-}
-
-async function openProfile(o) {
-  selectedOfficerId = o.id;
-  pendingPoint = null;
-  const full = await Api.request(`/api/users/${o.id}`);
-  document.getElementById('pmName').textContent = full.name;
-  document.getElementById('pmPhone').textContent = full.phone;
-  document.getElementById('pmEmail').textContent = full.email || '—';
-  document.getElementById('pmBadge').textContent = full.badge_id || '—';
-  document.getElementById('pmStatus').textContent = full.flagged ? 'Flagged (suspicious location activity)' : 'Normal';
-  document.getElementById('pmRallyName').value = o.rally_name || '';
-  document.getElementById('pmRadius').value = o.radius_meters || 25;
-  const btn = document.getElementById('pmAssign');
-  btn.disabled = true;
-  btn.textContent = 'Set location (click map first)';
-  document.getElementById('profileModal').style.display = 'flex';
-}
-
-document.getElementById('pmClose').addEventListener('click', () => {
-  document.getElementById('profileModal').style.display = 'none';
-  selectedOfficerId = null;
-});
-
-document.getElementById('pmAssign').addEventListener('click', async () => {
-  if (!pendingPoint || !selectedOfficerId) return;
-  const rallyName = document.getElementById('pmRallyName').value.trim() || 'Rally deployment';
-  const radiusMeters = Number(document.getElementById('pmRadius').value) || 25;
-  await Api.request('/api/assignments', {
-    method: 'POST',
-    body: { userId: selectedOfficerId, rallyName, lat: pendingPoint.lat, lng: pendingPoint.lng, radiusMeters },
-  });
-  document.getElementById('profileModal').style.display = 'none';
-  selectedOfficerId = null;
-  refreshAll();
-});
-
-initMap();
-</script>
+<script type="module" src="/js/pages/admin.js"></script>
 </body>
 </html>
