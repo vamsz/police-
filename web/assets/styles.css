@@ -104,10 +104,19 @@ h1, h2, h3 { margin: 0; font-weight: 700; line-height: 1.25; }
 
 /* --------------------------------------------------------------- app shell */
 
+/* A fixed full-screen wrapper holds the map. Google Maps overwrites the inline
+   position/size of the element it renders into, so that element (#map) is a
+   plain 100%×100% child — never the one carrying the layout positioning. */
 .app-map {
   position: fixed;
   inset: 0;
+  z-index: 0;
   background: var(--bg);
+}
+.app-map > #map {
+  position: relative;
+  width: 100%;
+  height: 100%;
 }
 
 /* Google's own controls sit inside #map; keep our floating chrome above them. */
