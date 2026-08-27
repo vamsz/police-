@@ -22,6 +22,16 @@ export function clockTime(value) {
   return value ? new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
 }
 
+/** Up to two initials from a name, for the avatar chips. */
+export function initials(name) {
+  return (name || '')
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('');
+}
+
 /** The vocabulary from the server's domain/status.js, given labels and a tone. */
 const STATUS_PRESENTATION = {
   on_post: { label: 'On post', tone: 'ok' },

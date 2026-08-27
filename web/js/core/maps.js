@@ -24,14 +24,15 @@ export function loadMaps(apiKey) {
 }
 
 const COLORS = {
-  on_post: '#1e7d4a',
-  outside: '#c62828',
-  low_accuracy: '#b26a00',
-  stale: '#b26a00',
-  no_signal: '#8a8f98',
-  unassigned: '#8a8f98',
-  post: '#1e3a5f',
-  placement: '#6a1b9a',
+  on_post: '#16a34a',
+  outside: '#dc2626',
+  low_accuracy: '#c2740a',
+  stale: '#c2740a',
+  no_signal: '#a6abb3',
+  unassigned: '#a6abb3',
+  post: '#101114', // ink, matching the brand
+  zone: '#ffd028', // amber safe-zone fill
+  placement: '#2563eb', // blue, distinct from the amber zone being placed
 };
 
 function svgIcon(maps, markup, { width, height, anchorX, anchorY }) {
@@ -130,8 +131,8 @@ export class DeploymentMap {
         strokeColor: COLORS.post,
         strokeOpacity: 0.7,
         strokeWeight: 1.5,
-        fillColor: COLORS.post,
-        fillOpacity: 0.07,
+        fillColor: COLORS.zone,
+        fillOpacity: 0.18,
         clickable: false,
       }),
       leash: new maps.Polyline({
@@ -177,8 +178,8 @@ export class DeploymentMap {
       layer.radius.setRadius(officer.radiusMeters);
       layer.radius.setOptions(
         isSelected
-          ? { strokeOpacity: 1, strokeWeight: 2.5, fillOpacity: 0.14 }
-          : { strokeOpacity: 0.7, strokeWeight: 1.5, fillOpacity: 0.07 }
+          ? { strokeOpacity: 1, strokeWeight: 2.5, fillOpacity: 0.28 }
+          : { strokeOpacity: 0.7, strokeWeight: 1.5, fillOpacity: 0.18 }
       );
       layer.radius.setMap(this.#map);
     } else {

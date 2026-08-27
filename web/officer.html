@@ -7,46 +7,48 @@
 <title>My post · Rally Deployment Tracker</title>
 <link rel="stylesheet" href="/assets/styles.css">
 </head>
-<body>
-<header class="topbar">
-  <span class="topbar__mark" aria-hidden="true">◎</span>
-  <div>
-    <div class="topbar__title" id="officerName">Officer</div>
-    <div class="topbar__subtitle">Rally Deployment Tracker</div>
+<body class="app">
+<div id="map" class="app-map"></div>
+
+<header class="float-top">
+  <div class="brand">
+    <div class="brand__logo" aria-hidden="true">RD</div>
+    <div>
+      <div class="brand__title" id="officerName">Officer</div>
+      <div class="brand__sub">On duty</div>
+    </div>
   </div>
-  <div class="topbar__spacer"></div>
-  <button type="button" id="signOut">Sign out</button>
+  <div class="float-top__spacer"></div>
+  <button type="button" id="signOut" class="btn-ghost">Sign out</button>
 </header>
 
-<div class="officer-view">
+<section class="sheet-bottom">
+  <div class="sheet-handle" aria-hidden="true"></div>
   <div id="banner" class="banner banner--muted">Waiting for location permission…</div>
-  <div id="map" class="map"></div>
 
-  <section class="officer-card" id="card">
-    <div class="officer-card__rally" id="rallyName">No assignment yet</div>
-    <div class="officer-card__notes" id="rallyNotes" hidden></div>
+  <div class="officer-card__rally" id="rallyName">No assignment yet</div>
+  <div class="officer-card__notes" id="rallyNotes" hidden></div>
 
-    <div class="officer-card__stats">
-      <div>
-        <div class="stat__value" id="statDistance">—</div>
-        <div class="stat__label">From post</div>
-      </div>
-      <div>
-        <div class="stat__value" id="statRadius">—</div>
-        <div class="stat__label">Allowed</div>
-      </div>
-      <div>
-        <div class="stat__value" id="statAccuracy">—</div>
-        <div class="stat__label">GPS accuracy</div>
-      </div>
+  <div class="officer-card__stats">
+    <div>
+      <div class="stat__value" id="statDistance">—</div>
+      <div class="stat__label">From post</div>
     </div>
-
-    <div class="officer-card__footer">
-      <span id="lastSent">Not reported yet</span>
-      <button type="button" class="btn btn--sm" id="recentre">Centre map</button>
+    <div>
+      <div class="stat__value" id="statRadius">—</div>
+      <div class="stat__label">Allowed</div>
     </div>
-  </section>
-</div>
+    <div>
+      <div class="stat__value" id="statAccuracy">—</div>
+      <div class="stat__label">GPS accuracy</div>
+    </div>
+  </div>
+
+  <div class="officer-card__footer">
+    <span id="lastSent">Not reported yet</span>
+    <button type="button" class="btn btn--sm" id="recentre">Centre map</button>
+  </div>
+</section>
 
 <script type="module" src="/js/pages/officer.js"></script>
 </body>

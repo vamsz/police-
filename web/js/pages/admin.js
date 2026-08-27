@@ -1,7 +1,7 @@
 import { api } from '../core/api.js';
 import { requireRole, signOut } from '../core/session.js';
 import { $, el, render } from '../core/dom.js';
-import { distance, relativeTime, clockTime, statusInfo, alertLabel } from '../core/format.js';
+import { distance, relativeTime, clockTime, statusInfo, alertLabel, initials } from '../core/format.js';
 import { loadMaps, DeploymentMap } from '../core/maps.js';
 
 // requireRole redirects and returns null when the visitor is not signed in as
@@ -166,6 +166,7 @@ function rosterRow(officer) {
       onClick: () => selectOfficer(officer.id),
     },
     [
+      el('div', { class: `avatar${officer.isActive ? '' : ' avatar--muted'}`, text: initials(officer.name) }),
       el('div', { class: 'roster__body' }, [
         el('div', { class: 'roster__name' }, [
           officer.name,
@@ -282,6 +283,7 @@ function renderDetail() {
     panel,
     el('div', { class: 'detail__header' }, [
       el('button', { type: 'button', class: 'detail__back', text: '←', title: 'Back to roster', onClick: closeDetail }),
+      el('div', { class: `avatar avatar--lg${officer.isActive ? '' : ' avatar--muted'}`, text: initials(officer.name) }),
       el('div', { class: 'detail__identity' }, [
         el('div', { class: 'detail__name', text: officer.name }),
         el('div', { class: 'detail__badge', text: officer.badgeId ? `Badge ${officer.badgeId}` : 'No badge on file' }),
@@ -333,7 +335,7 @@ function postSection(officer) {
   const hasPost = officer.assignmentId != null;
 
   return el('div', { class: 'detail__section' }, [
-    el('h3', { class: 'panel__section-title', style: { padding: '0 0 0.5rem' } }, ['Assigned post']),
+    el('h3', { class: 'section-title', style: { padding: '0 0 0.5rem' } }, ['Assigned post']),
 
     hasPost
       ? el('dl', { class: 'facts' }, [
@@ -498,7 +500,7 @@ function placementSection(officer) {
   });
 
   return el('div', { class: 'detail__section' }, [
-    el('h3', { class: 'panel__section-title', style: { padding: '0 0 0.5rem' } }, ['Place post']),
+    el('h3', { class: 'section-title', style: { padding: '0 0 0.5rem' } }, ['Place post']),
 
     el('p', { class: 'placement__prompt' }, [
       placement.point

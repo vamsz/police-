@@ -7,48 +7,48 @@
 <title>Deployment console · Rally Deployment Tracker</title>
 <link rel="stylesheet" href="/assets/styles.css">
 </head>
-<body>
-<header class="topbar">
-  <span class="topbar__mark" aria-hidden="true">◎</span>
-  <div>
-    <div class="topbar__title">Deployment console</div>
-    <div class="topbar__subtitle" id="adminName">Supervisor</div>
+<body class="app">
+<div id="map" class="app-map"></div>
+
+<header class="float-top">
+  <div class="brand">
+    <div class="brand__logo" aria-hidden="true">RD</div>
+    <div>
+      <div class="brand__title">Deployment console</div>
+      <div class="brand__sub" id="adminName">Supervisor</div>
+    </div>
   </div>
-  <div class="topbar__spacer"></div>
-  <span class="topbar__subtitle" id="refreshedAt"></span>
-  <button type="button" id="signOut">Sign out</button>
+  <div class="float-top__spacer"></div>
+  <span class="float-top__meta" id="refreshedAt"></span>
+  <button type="button" id="signOut" class="btn-ghost">Sign out</button>
 </header>
 
-<div class="console">
-  <aside class="panel">
-    <!-- Roster mode -->
-    <div id="rosterMode" class="panel__scroll">
-      <div class="summary" id="summary"></div>
+<aside class="float-panel">
+  <!-- Roster mode -->
+  <div id="rosterMode" class="panel-body">
+    <div class="summary" id="summary"></div>
 
-      <div class="panel__search">
-        <label class="sr-only" for="search">Search officers</label>
-        <input type="search" id="search" placeholder="Search by name, badge, or rally…" autocomplete="off">
-      </div>
-
-      <h2 class="panel__section-title">
-        <span>Officers</span>
-        <span id="rosterCount"></span>
-      </h2>
-      <div id="roster"></div>
-
-      <h2 class="panel__section-title">
-        <span>Open alerts</span>
-        <span id="alertCount"></span>
-      </h2>
-      <div id="alerts"></div>
+    <div class="panel-search">
+      <label class="sr-only" for="search">Search officers</label>
+      <input type="search" id="search" placeholder="Search by name, badge, or rally…" autocomplete="off">
     </div>
 
-    <!-- Detail mode: replaces the roster so the map is never covered -->
-    <div id="detailMode" class="panel__scroll" hidden></div>
-  </aside>
+    <h2 class="section-title">
+      <span>Officers</span>
+      <span id="rosterCount"></span>
+    </h2>
+    <div id="roster"></div>
 
-  <div id="map" class="map"></div>
-</div>
+    <h2 class="section-title">
+      <span>Open alerts</span>
+      <span id="alertCount"></span>
+    </h2>
+    <div id="alerts"></div>
+  </div>
+
+  <!-- Detail mode: replaces the roster so the map is never covered -->
+  <div id="detailMode" class="panel-body" hidden></div>
+</aside>
 
 <script type="module" src="/js/pages/admin.js"></script>
 </body>
