@@ -7,6 +7,7 @@ const helmet = require('helmet');
 
 const { config } = require('../config');
 const routes = require('./routes');
+const { auditLog } = require('./middleware/auditLog');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 const WEB_ROOT = path.join(__dirname, '..', '..', '..', 'web');
@@ -38,8 +39,25 @@ function createApp() {
 
   app.set('trust proxy', 1); // behind nginx/Caddy/a platform proxy in production
   app.disable('x-powered-by');
+  app.disable('etag'); // API responses are per-user; no shared caching
 
-  app.use(helmet({ contentSecurityPolicy, crossOriginEmbedderPolicy: false }));
+  app.use(
+    helmet({
+      contentSecurityPolicy,
+      crossOriginEmbedderPolicy: false,
+      // Two years, subdomains included, preload-eligible. Once a browser has seen
+      // this over HTTPS it refuses to talk to the origin over plain HTTP.
+      hsts: { maxAge: 63_072_000, includeSubDomains: true, preload: true },
+      referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+    })
+  );
+
+  // Lock down powerful browser features. Officers need geolocation; nothing here
+  // needs camera, microphone, or payment, so those are denied to the whole origin.
+  app.use((_req, res, next) => {
+    res.setHeader('Permissions-Policy', 'geolocation=(self), camera=(), microphone=(), payment=(), usb=()');
+    next();
+  });
 
   // The API and the UI are served from the same origin, so cross-origin access is
   // only opened up where it is explicitly configured.
@@ -53,7 +71,7 @@ function createApp() {
 
   app.get('/health', (_req, res) => res.json({ status: 'ok', uptimeSeconds: Math.round(process.uptime()) }));
 
-  app.use('/api', routes);
+  app.use('/api', auditLog, routes);
 
   app.use(express.static(WEB_ROOT, { extensions: ['html'], maxAge: config.isProduction ? '1h' : 0 }));
 

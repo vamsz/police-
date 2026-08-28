@@ -1,7 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 const { config } = require('../config');
@@ -23,17 +23,33 @@ function resolveRole(accessCode) {
   throw AppError.forbidden('That access code is not valid. Ask your administrator for the current code.');
 }
 
+// HS256 is pinned on both sides. Verifying without an explicit algorithm list
+// is the classic JWT algorithm-confusion foothold, so we never accept a token
+// whose header names a different algorithm. The issuer/audience are checked too,
+// so a token minted for another service can't be replayed against this one.
+const JWT_ISSUER = 'rally-deployment-tracker';
+const JWT_AUDIENCE = 'rally-deployment-tracker';
+
 function issueToken(user) {
   return jwt.sign(
     { sub: String(user.id), role: user.role, name: user.name },
     config.auth.jwtSecret,
-    { expiresIn: config.auth.jwtExpiresIn }
+    {
+      algorithm: 'HS256',
+      expiresIn: config.auth.jwtExpiresIn,
+      issuer: JWT_ISSUER,
+      audience: JWT_AUDIENCE,
+    }
   );
 }
 
 function verifyToken(token) {
   try {
-    return jwt.verify(token, config.auth.jwtSecret);
+    return jwt.verify(token, config.auth.jwtSecret, {
+      algorithms: ['HS256'],
+      issuer: JWT_ISSUER,
+      audience: JWT_AUDIENCE,
+    });
   } catch {
     throw AppError.unauthorized('Your session has expired. Please sign in again.');
   }

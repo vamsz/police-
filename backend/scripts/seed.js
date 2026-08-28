@@ -8,7 +8,7 @@
  * "deletes every officer" are the same sentence.
  */
 
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const { assertValid, config } = require('../src/config');
 
 const RALLY = 'MG Road Rally';
