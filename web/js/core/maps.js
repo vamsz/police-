@@ -78,6 +78,7 @@ export class DeploymentMap {
   #map;
   #layers = new Map();
   #placement = null;
+  #trail = null;
   #hasFitted = false;
 
   constructor(maps, container, { center, view = {}, onMapClick } = {}) {
@@ -287,6 +288,78 @@ export class DeploymentMap {
     this.#placement.marker.setMap(null);
     this.#placement.circle.setMap(null);
     this.#placement = null;
+  }
+
+  /**
+   * Draws the selected officer's recent path as a dotted breadcrumb line. Each
+   * segment is coloured by whether the officer was outside their radius at that
+   * point, so a supervisor can read the movement — when and where they strayed —
+   * at a glance. A round dot marks the oldest fix so the direction is unambiguous.
+   */
+  showTrail(points) {
+    this.clearTrail();
+    if (!points || points.length < 2) return;
+
+    const maps = this.#maps;
+    const overlays = [];
+
+    for (let i = 1; i < points.length; i += 1) {
+      const prev = points[i - 1];
+      const curr = points[i];
+      const breach = prev.outsideRadius || curr.outsideRadius;
+      overlays.push(
+        new maps.Polyline({
+          map: this.#map,
+          path: [
+            { lat: prev.lat, lng: prev.lng },
+            { lat: curr.lat, lng: curr.lng },
+          ],
+          strokeOpacity: 0,
+          zIndex: 4,
+          clickable: false,
+          icons: [
+            {
+              icon: {
+                path: maps.SymbolPath.CIRCLE,
+                scale: 2.2,
+                fillColor: breach ? COLORS.outside : COLORS.post,
+                fillOpacity: 0.85,
+                strokeWeight: 0,
+              },
+              offset: '0',
+              repeat: '10px',
+            },
+          ],
+        })
+      );
+    }
+
+    // Mark the start of the trail so its direction reads clearly.
+    const start = points[0];
+    overlays.push(
+      new maps.Marker({
+        map: this.#map,
+        position: { lat: start.lat, lng: start.lng },
+        clickable: false,
+        zIndex: 4,
+        icon: {
+          path: maps.SymbolPath.CIRCLE,
+          scale: 5,
+          fillColor: '#ffffff',
+          fillOpacity: 1,
+          strokeColor: COLORS.post,
+          strokeWeight: 2,
+        },
+      })
+    );
+
+    this.#trail = overlays;
+  }
+
+  clearTrail() {
+    if (!this.#trail) return;
+    for (const overlay of this.#trail) overlay.setMap(null);
+    this.#trail = null;
   }
 
   panTo(point, zoom) {

@@ -25,6 +25,7 @@ const state = {
   placement: null, // { officerId, point, radiusMeters, rallyName, notes }
   search: '',
   config: {},
+  rallyNames: [],
   map: null,
 };
 
@@ -37,6 +38,8 @@ async function start() {
   });
 
   state.config = await api.clientConfig().catch(() => ({}));
+  // Existing rally names power the autocomplete when posting officers.
+  api.rallyNames().then((r) => { state.rallyNames = r.rallyNames ?? []; }).catch(() => {});
   await initMap();
   await refresh();
 
@@ -103,7 +106,10 @@ async function refresh() {
   renderAlerts();
   // Never rebuild the detail panel mid-placement: it would wipe out whatever the
   // supervisor is typing. The readout updates itself instead.
-  if (state.selectedId && !state.placement) renderDetail();
+  if (state.selectedId && !state.placement) {
+    renderDetail();
+    loadTrail(state.selectedId); // keep the breadcrumb current as new fixes arrive
+  }
 
   state.map?.syncOfficers(state.officers, { onSelect: selectOfficer, selectedId: state.selectedId });
   // Keep officers clear of the floating panel (left) and header (top).
@@ -257,11 +263,27 @@ function selectOfficer(officerId) {
   if (focus) state.map?.panTo(focus, 16);
 
   state.map?.syncOfficers(state.officers, { onSelect: selectOfficer, selectedId: state.selectedId });
+  loadTrail(officerId);
+}
+
+/**
+ * Fetches the officer's recent movement and draws it on the map. Best-effort: a
+ * failed trail load never blocks selecting the officer.
+ */
+async function loadTrail(officerId) {
+  try {
+    const profile = await api.officer(officerId);
+    // Ignore a stale response if the operator has since selected someone else.
+    if (state.selectedId === officerId) state.map?.showTrail(profile.trail);
+  } catch {
+    /* the roster and detail still work without the trail */
+  }
 }
 
 function closeDetail() {
   state.selectedId = null;
   cancelPlacement();
+  state.map?.clearTrail();
   $('#detailMode').hidden = true;
   $('#rosterMode').hidden = false;
   renderRoster();
@@ -459,6 +481,8 @@ function placementSection(officer) {
   const rallyInput = el('input', {
     type: 'text',
     id: 'placementRally',
+    list: 'rallyNameOptions',
+    autocomplete: 'off',
     value: placement.rallyName,
     placeholder: 'e.g. MG Road Rally',
     maxLength: 120,
@@ -466,6 +490,14 @@ function placementSection(officer) {
       placement.rallyName = event.target.value;
     },
   });
+
+  // Suggest rally names already in use, so every officer at one event lands under
+  // the exact same name rather than near-duplicates.
+  const rallyOptions = el(
+    'datalist',
+    { id: 'rallyNameOptions' },
+    state.rallyNames.map((name) => el('option', { value: name }))
+  );
 
   const radiusOutput = el('output', { text: distance(placement.radiusMeters) });
   const radiusInput = el('input', {
@@ -520,7 +552,7 @@ function placementSection(officer) {
       }),
     ]),
 
-    el('div', { class: 'field' }, [el('label', { text: 'Rally / area name' }), rallyInput]),
+    el('div', { class: 'field' }, [el('label', { text: 'Rally / area name' }), rallyInput, rallyOptions]),
 
     el('div', { class: 'field' }, [
       el('label', { text: 'Allowed radius' }),
