@@ -90,11 +90,10 @@ export class DeploymentMap {
 
     this.#map = new maps.Map(container, {
       center: center ?? view.defaultCenter ?? { lat: 12.9716, lng: 77.5946 },
-      zoom: center ? Math.max(15, view.minZoom ?? 11) : view.defaultZoom ?? 12,
-      // Capping how far out you can zoom is the single biggest smoothness win:
-      // it stops the map loading a country/world of mostly-empty tiles that this
-      // single-city tool never needs.
-      minZoom: view.minZoom ?? 11,
+      zoom: center ? 15 : view.defaultZoom ?? 12,
+      // Zoom-out is left open (see MAP_MIN_ZOOM); the loading chip and neutral
+      // ground colour keep a wide, tile-heavy view feeling smooth rather than blank.
+      minZoom: view.minZoom ?? 3,
       maxZoom: view.maxZoom ?? 20,
       backgroundColor,
       mapTypeControl: false,

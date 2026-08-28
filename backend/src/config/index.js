@@ -85,9 +85,10 @@ const config = Object.freeze({
     defaultLat: decimal('MAP_DEFAULT_LAT', 12.9716, { min: -90, max: 90 }),
     defaultLng: decimal('MAP_DEFAULT_LNG', 77.5946, { min: -180, max: 180 }),
     defaultZoom: integer('MAP_DEFAULT_ZOOM', 12, { min: 3, max: 20 }),
-    // Stops the map zooming out to a country/world view of mostly-empty tiles,
-    // which is pointless for a single-city deployment and slow to load.
-    minZoom: integer('MAP_MIN_ZOOM', 11, { min: 3, max: 18 }),
+    // Lowest zoom the map allows. Low values let the operator zoom right out to
+    // a regional/country view; the loading aids keep that smooth. Raise it toward
+    // city level (e.g. 11) if you want to stop the map showing empty terrain.
+    minZoom: integer('MAP_MIN_ZOOM', 3, { min: 1, max: 18 }),
     maxZoom: integer('MAP_MAX_ZOOM', 20, { min: 14, max: 22 }),
   }),
 

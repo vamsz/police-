@@ -43,7 +43,7 @@
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", monospace;
 
   --float-gap: 16px;
-  --header-h: 62px;
+  --corner-h: 40px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -121,54 +121,59 @@ h1, h2, h3 { margin: 0; font-weight: 700; line-height: 1.25; }
 
 /* Google's own controls sit inside #map; keep our floating chrome above them. */
 
-.float-top {
+/* No top bar: a Sign-out button floats at top-left and a name chip at top-right,
+   leaving the map open across the top. */
+.corner-signout {
   position: fixed;
   top: var(--float-gap);
   left: var(--float-gap);
-  right: var(--float-gap);
-  z-index: 5;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  height: var(--header-h);
-  padding: 0 0.9rem;
+  z-index: 6;
+  height: var(--corner-h);
+  font: inherit;
+  font-size: 0.83rem;
+  font-weight: 600;
+  padding: 0 0.95rem;
+  border: none;
+  border-radius: 999px;
   background: var(--surface);
-  border-radius: var(--r-card);
+  color: var(--text);
   box-shadow: var(--shadow);
+  cursor: pointer;
 }
+.corner-signout:hover { background: var(--surface-2); }
 
-.float-top__spacer { flex: 1; }
-
-.float-top__meta {
-  font-size: 0.76rem;
+.corner-name {
+  position: fixed;
+  top: var(--float-gap);
+  right: var(--float-gap);
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.05rem;
+  min-height: var(--corner-h);
+  justify-content: center;
+  padding: 0.25rem 0.95rem;
+  background: var(--surface);
+  border-radius: 999px;
+  box-shadow: var(--shadow);
+  max-width: 45vw;
+}
+.corner-name__title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.corner-name__meta {
+  font-size: 0.7rem;
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-
-.brand { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
-
-.brand__logo {
-  width: 38px; height: 38px;
-  border-radius: 12px;
-  background: var(--brand);
-  color: var(--on-brand);
-  display: grid;
-  place-items: center;
-  font-weight: 800;
-  font-size: 0.82rem;
-  flex-shrink: 0;
-}
-
-.brand__title {
-  font-size: 0.95rem;
-  font-weight: 700;
-  line-height: 1.2;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.brand__sub { font-size: 0.76rem; color: var(--text-muted); margin-top: 0.05rem; }
 
 /* --------------------------------------------------------------- buttons */
 
@@ -199,20 +204,6 @@ h1, h2, h3 { margin: 0; font-weight: 700; line-height: 1.25; }
 .btn--block { width: 100%; }
 .btn--sm { font-size: 0.8rem; padding: 0.4rem 0.75rem; }
 
-.btn-ghost {
-  font: inherit;
-  font-size: 0.82rem;
-  font-weight: 600;
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: 999px;
-  background: var(--surface-2);
-  color: var(--text);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.btn-ghost:hover { background: var(--border); }
-
 .btn-row { display: flex; gap: 0.6rem; }
 .btn-row .btn { flex: 1; }
 
@@ -240,7 +231,7 @@ input:focus, select:focus, textarea:focus {
   border-color: var(--brand);
   background: var(--surface);
 }
-button:focus-visible, .btn:focus-visible, .btn-ghost:focus-visible,
+button:focus-visible, .btn:focus-visible,
 .roster__item:focus-visible, .tabs button:focus-visible {
   outline: 2px solid var(--brand);
   outline-offset: 2px;
@@ -354,7 +345,7 @@ input[type="range"] { width: 100%; accent-color: var(--brand); padding: 0; backg
 
 .float-panel {
   position: fixed;
-  top: calc(var(--float-gap) + var(--header-h) + 10px);
+  top: calc(var(--float-gap) + var(--corner-h) + 10px);
   left: var(--float-gap);
   bottom: var(--float-gap);
   width: 344px;
@@ -617,9 +608,9 @@ input[type="range"] { width: 100%; accent-color: var(--brand); padding: 0; backg
 @media (max-width: 760px) {
   :root { --float-gap: 10px; }
 
-  .float-top { height: 54px; }
-  .brand__sub, .float-top__meta { display: none; }
+  .corner-name__meta { display: none; }
 
+  /* On phones the panel is a bottom drawer, clear of the top corners. */
   .float-panel {
     top: auto;
     left: var(--float-gap);
