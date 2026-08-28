@@ -1,0 +1,18 @@
+# Dependencies are installed fresh in the image
+**/node_modules
+# Secrets and local env must never enter the image
+**/.env
+.env
+# Local Postgres data / logs
+**/*.log
+# Git and CI metadata
+.git
+.github
+.gitignore
+# Docs and dev-only files
+*.md
+scratchpad
+# Docker files themselves
+Dockerfile
+.dockerignore
+docker-compose*.yml

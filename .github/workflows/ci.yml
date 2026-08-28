@@ -1,0 +1,136 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel superseded runs on the same ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+        working-directory: backend
+      - name: Lint backend
+        run: npm run lint
+        working-directory: backend
+      - name: Syntax-check frontend
+        run: npm run lint:web
+        working-directory: backend
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+        working-directory: backend
+      # Fail the build on any high or critical production advisory.
+      - run: npm audit --omit=dev --audit-level=high
+        working-directory: backend
+
+  test:
+    name: Unit + end-to-end
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: police_rally
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/police_rally
+      JWT_SECRET: ci-test-secret-not-used-in-production-1234567890
+      ADMIN_REGISTRATION_CODE: ci-admin-code
+      OFFICER_REGISTRATION_CODE: ci-officer-code
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - run: npm ci
+        working-directory: backend
+
+      # Domain + validation unit tests need no database.
+      - name: Unit tests
+        run: npm test
+        working-directory: backend
+
+      - name: Migrate
+        run: npm run migrate
+        working-directory: backend
+
+      - name: Seed demo data
+        run: npm run seed
+        working-directory: backend
+
+      - name: Start server
+        run: |
+          node src/server.js &
+          echo $! > /tmp/server.pid
+          # Wait for the health endpoint before driving the e2e suite.
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:4000/health > /dev/null; then echo "up"; break; fi
+            sleep 1
+          done
+        working-directory: backend
+
+      - name: End-to-end
+        run: npm run e2e
+        working-directory: backend
+
+      - name: Stop server
+        if: always()
+        run: kill "$(cat /tmp/server.pid)" || true
+
+  docker:
+    name: Docker build
+    runs-on: ubuntu-latest
+    needs: [lint, audit, test]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: rally-deployment-tracker:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

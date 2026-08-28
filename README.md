@@ -187,6 +187,52 @@ ordinary drift starts to look like a breach even with the accuracy grace.
 
 ---
 
+## Deployment
+
+### Docker Compose (app + Postgres)
+
+The whole stack — the app and its own Postgres — runs from one file.
+
+```bash
+cp .env.docker.example .env    # then fill in the secrets
+docker compose up -d --build
+```
+
+The app waits for the database to be healthy, runs migrations, then serves on
+`http://localhost:4000`. Put a TLS-terminating reverse proxy in front for
+production (browsers require HTTPS for the Geolocation API). Generate secrets
+with `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`.
+
+The image is a multi-stage `node:20-alpine` build that runs as an unprivileged
+user with a container health probe. Because password hashing uses pure-JS
+`bcryptjs`, there is no native toolchain in the image.
+
+### Continuous integration
+
+`.github/workflows/ci.yml` runs on every push and PR to `main`:
+
+| Job | What it gates |
+| --- | --- |
+| **lint** | ESLint on the backend + a syntax check of the frontend modules |
+| **audit** | `npm audit` fails the build on any high/critical advisory |
+| **test** | 40 unit tests, then the 23-check end-to-end suite against a real Postgres service |
+| **docker** | builds the production image (after the others pass) |
+
+Run the same gates locally:
+
+```bash
+cd backend
+npm run lint && npm run lint:web && npm run audit && npm test && npm run e2e
+```
+
+### Security
+
+See [SECURITY.md](SECURITY.md) for the full threat model, the controls in place
+(JWT hardening, CSP/HSTS/Permissions-Policy, the audit trail), the accepted
+limitations, and a deployment security checklist.
+
+---
+
 ## Production notes
 
 - **HTTPS is not optional.** Browsers refuse the Geolocation API on insecure

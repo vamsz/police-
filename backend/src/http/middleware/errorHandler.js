@@ -14,7 +14,7 @@ function notFound(req, _res, next) {
  * Anything that is not an AppError is an unexpected fault: it is logged with its
  * stack and reported as a bare 500, so internal details never reach a client.
  */
-// eslint-disable-next-line no-unused-vars -- Express identifies error handlers by arity
+// The unused `_next` is required: Express identifies error handlers by 4-arg arity.
 function errorHandler(err, req, res, _next) {
   if (err instanceof AppError) {
     if (err.status >= 500) logger.error(err.message, { code: err.code });
